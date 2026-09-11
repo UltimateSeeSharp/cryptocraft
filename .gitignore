@@ -38,3 +38,8 @@ run/
 **/src/generated/**/.cache/
 repo/
 !**/src/**/repo/
+
+### CryptoCraft ###
+# RandomX binaries under miner/src/main/resources/native/ are vendored deliberately
+# (docs/MINING.md §5) and must stay tracked. Only local build output is ignored.
+/randomx-src/

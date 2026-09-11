@@ -1,0 +1,71 @@
+name: Build RandomX
+
+# Builds librandomx from the pinned upstream tag for all three platforms and uploads the
+# results. Run manually; commit the downloaded artifacts to src/main/resources/native/.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'tevador/RandomX tag to build'
+        required: true
+        default: 'v1.2.3'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: windows-x86_64
+            built: build/Release/randomx.dll
+            name: randomx.dll
+          - os: ubuntu-22.04
+            artifact: linux-x86_64
+            built: build/librandomx.so
+            name: librandomx.so
+          - os: macos-13
+            artifact: macos-x86_64
+            built: build/librandomx.dylib
+            name: librandomx.dylib
+          - os: macos-14
+            artifact: macos-aarch64
+            built: build/librandomx.dylib
+            name: librandomx.dylib
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout RandomX
+        uses: actions/checkout@v4
+        with:
+          repository: tevador/RandomX
+          ref: ${{ inputs.tag }}
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      # The upstream test binary over the official vectors. If this fails the binary is
+      # not worth shipping.
+      - name: Verify
+        shell: bash
+        run: |
+          if [ -x build/Release/randomx-tests.exe ]; then
+            ./build/Release/randomx-tests.exe
+          else
+            ./build/randomx-tests
+          fi
+
+      - name: Stage
+        shell: bash
+        run: |
+          mkdir -p out
+          cp "${{ matrix.built }}" "out/${{ matrix.name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: librandomx-${{ matrix.artifact }}
+          path: out/${{ matrix.name }}
+          if-no-files-found: error
