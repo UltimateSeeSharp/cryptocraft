@@ -1,7 +1,7 @@
 name: Build RandomX
 
-# Builds librandomx from the pinned upstream tag for all three platforms and uploads the
-# results. Run manually; commit the downloaded artifacts to src/main/resources/native/.
+# Builds librandomx from the pinned upstream tag and uploads one artifact per platform.
+# Run manually; commit each download to miner/src/main/resources/native/<platform>/.
 on:
   workflow_dispatch:
     inputs:
@@ -18,19 +18,15 @@ jobs:
         include:
           - os: windows-latest
             artifact: windows-x86_64
-            built: build/Release/randomx.dll
             name: randomx.dll
           - os: ubuntu-22.04
             artifact: linux-x86_64
-            built: build/librandomx.so
             name: librandomx.so
           - os: macos-13
             artifact: macos-x86_64
-            built: build/librandomx.dylib
             name: librandomx.dylib
           - os: macos-14
             artifact: macos-aarch64
-            built: build/librandomx.dylib
             name: librandomx.dylib
 
     runs-on: ${{ matrix.os }}
@@ -48,21 +44,28 @@ jobs:
         run: cmake --build build --config Release
 
       # The upstream test binary over the official vectors. If this fails the binary is
-      # not worth shipping.
+      # not worth shipping. Located by search: multi-config generators (MSVC) emit into
+      # build/Release, single-config ones into build.
       - name: Verify
         shell: bash
         run: |
-          if [ -x build/Release/randomx-tests.exe ]; then
-            ./build/Release/randomx-tests.exe
-          else
-            ./build/randomx-tests
+          tests=$(find build -name 'randomx-tests' -o -name 'randomx-tests.exe' | head -1)
+          if [ -z "$tests" ]; then
+            echo "::error::randomx-tests not found under build/"; find build -maxdepth 2; exit 1
           fi
+          echo "Running $tests"
+          "$tests"
 
       - name: Stage
         shell: bash
         run: |
+          lib=$(find build -name '${{ matrix.name }}' | head -1)
+          if [ -z "$lib" ]; then
+            echo "::error::${{ matrix.name }} not found under build/"; find build -maxdepth 2; exit 1
+          fi
           mkdir -p out
-          cp "${{ matrix.built }}" "out/${{ matrix.name }}"
+          cp "$lib" "out/${{ matrix.name }}"
+          ls -l out/
 
       - uses: actions/upload-artifact@v4
         with:
