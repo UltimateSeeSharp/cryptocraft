@@ -72,16 +72,29 @@ jobs:
       # Upstream's RANDOMX_EXPORT is empty and its cmake_minimum_required(3.10) stops the
       # CMAKE_-prefixed variable from initialising the property, so MSVC otherwise exports
       # nothing: no import library, and a DLL the binding cannot resolve symbols in.
+      # RANDOMX_SOURCE_DIR is resolved from the working directory, not github.workspace,
+      # which expands to the host path and does not exist inside a container.
       - name: Configure
+        shell: bash
         run: >
           cmake
           -S .cryptocraft/.github/randomx-shared
           -B build
           -DCMAKE_BUILD_TYPE=Release
-          -DRANDOMX_SOURCE_DIR=${{ github.workspace }}/randomx
+          -DRANDOMX_SOURCE_DIR="$PWD/randomx"
 
       - name: Build
         run: cmake --build build --config Release
+
+      # Without this a later failure only says "no files found", hiding which step broke.
+      - name: Show build output
+        if: always()
+        shell: bash
+        run: |
+          echo "--- working directory ---"; pwd; ls -la
+          echo "--- build tree (2 levels) ---"; find build -maxdepth 2 2>/dev/null || echo "no build/"
+          echo "--- libraries and executables ---"
+          find build \( -name 'librandomx*' -o -name 'randomx*.dll' -o -name 'randomx-tests*' \) 2>/dev/null || true
 
       - name: Stage
         shell: bash
