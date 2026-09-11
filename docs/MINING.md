@@ -133,6 +133,12 @@ MSVC exports nothing. `.github/randomx-shared/` wraps the upstream project and s
 `WINDOWS_EXPORT_ALL_SYMBOLS` on the target; setting it as a `CMAKE_`-prefixed variable does
 not work, because upstream declares `cmake_minimum_required(VERSION 3.10)`.
 
+The Linux binary is built inside a Debian 12 container, because a `.so` requires the glibc
+it was built against or newer. That sets the floor at glibc 2.36 — Ubuntu 22.04+, Debian
+12+, current Fedora and Arch — while the runner itself stays supported. Move the floor by
+changing the container, not the runner. macOS x86_64 comes from `macos-15-intel`, the last
+Intel image, which GitHub retires in August 2027; Apple Silicon only after that.
+
 **FFM is reached reflectively.** 1.21.1 runs on Java 21, where FFM is a preview API:
 `--enable-preview` would version-lock the class files so Minecraft's launcher could not
 load them. The runtime is complete on 21 — only compiling against it is gated — so one

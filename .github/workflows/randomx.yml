@@ -20,18 +20,37 @@ jobs:
           - os: windows-latest
             artifact: windows-x86_64
             name: randomx.dll
-          - os: ubuntu-22.04
+          # Built inside Debian 12 so the .so needs only glibc 2.36 and loads on every
+          # still-supported Linux (Ubuntu 22.04+, Debian 12+, Fedora, Arch). The runner
+          # stays current; only the toolchain inside the container is old. Debian 12 is
+          # supported to 2028 — bump it, not the runner, to move the compatibility floor.
+          - os: ubuntu-latest
+            container: debian:12
             artifact: linux-x86_64
             name: librandomx.so
-          - os: macos-13
+          # macos-13 was retired in Dec 2025. macos-15-intel is the last x86_64 macOS
+          # image and goes away in Aug 2027; after that, Apple Silicon only.
+          - os: macos-15-intel
             artifact: macos-x86_64
             name: librandomx.dylib
-          - os: macos-14
+          - os: macos-15
             artifact: macos-aarch64
             name: librandomx.dylib
 
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
     steps:
+      # The Debian container is bare: no compiler, cmake, git or python.
+      - name: Install build tools
+        if: matrix.container
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake git python3 ca-certificates
+          ln -sf /usr/bin/python3 /usr/bin/python
+          # checkout clones as a different uid than the container user.
+          git config --global --add safe.directory '*'
+
       - name: Checkout RandomX
         uses: actions/checkout@v4
         with:
@@ -114,19 +133,25 @@ jobs:
       - name: Record provenance
         shell: bash
         run: |
-          cd randomx
-          cat > ../out/PROVENANCE.txt <<EOF
+          # sha256sum is coreutils; macOS ships shasum instead.
+          if command -v sha256sum >/dev/null; then
+            digest=$(sha256sum "out/${{ matrix.name }}" | cut -d' ' -f1)
+          else
+            digest=$(shasum -a 256 "out/${{ matrix.name }}" | cut -d' ' -f1)
+          fi
+          commit=$(git -C randomx rev-parse HEAD)
+          cat > out/PROVENANCE.txt <<EOF
           source:    https://github.com/tevador/RandomX
           tag:       ${{ inputs.tag }}
-          commit:    $(git rev-parse HEAD)
+          commit:    $commit
           platform:  ${{ matrix.artifact }}
-          runner:    ${{ matrix.os }}
+          runner:    ${{ matrix.os }}${{ matrix.container && format(' (container {0})', matrix.container) || '' }}
           built:     $(date -u +%Y-%m-%dT%H:%M:%SZ)
           run:       ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           checks:    all 11 required symbols exported; upstream randomx-tests passed
-          sha256:    $(cd .. && sha256sum "out/${{ matrix.name }}" | cut -d' ' -f1)
+          sha256:    $digest
           EOF
-          cat ../out/PROVENANCE.txt
+          cat out/PROVENANCE.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
