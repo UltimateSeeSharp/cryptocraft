@@ -11,12 +11,12 @@ document the step names.
 
 ## STATUS
 
-**Current step:** 1.1
-**Last updated:** 2026-09-11 — 2.1 done
+**Current step:** 1.2
+**Last updated:** 2026-09-11 — 1.1 done
 
 | Phase | Steps | State |
 |---|---|---|
-| 1 — Stratum client | 1.1–1.5 | not started |
+| 1 — Stratum client | 1.1–1.5 | 1.1 done |
 | 2 — Mod skeleton | 2.1–2.3 | 2.1 done |
 | 3 — Racks and hardware | 3.1–3.5 | not started |
 | 4 — Mining integration | 4.1–4.4 | not started |
@@ -31,8 +31,9 @@ document the step names.
 
 **Notes for the next agent:**
 
-- 1.1 starts with the CI workflow that builds and vendors the binaries (`docs/MINING.md`
-  §5); no C++ toolchain on this machine, so the binding can't be tested locally until then.
+- No binaries are vendored yet: run the *Build RandomX* workflow, which opens a PR adding
+  all four. The vector tests skip until then; `-Pcryptocraft.randomx.path=<file>` runs them
+  against a local build. Verified on Windows: 17/17 pass, 262 H/s single-thread fast mode.
 - Patchouli is not declared in `neoforge.mods.toml` — a required dep absent from the dev
   runtime breaks `runClient`. Add it with a `localRuntime` dep in 8.4.
 

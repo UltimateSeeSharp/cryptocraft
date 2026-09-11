@@ -1,7 +1,8 @@
 name: Build RandomX
 
-# Builds librandomx from the pinned upstream tag and uploads one artifact per platform.
-# Run manually; commit each download to miner/src/main/resources/native/<platform>/.
+# Builds librandomx for every supported platform from the pinned upstream tag, verifies
+# each one, and opens a pull request placing them under miner/src/main/resources/native/.
+# The binaries only ever enter the repo this way — never from a local build.
 on:
   workflow_dispatch:
     inputs:
@@ -36,24 +37,29 @@ jobs:
         with:
           repository: tevador/RandomX
           ref: ${{ inputs.tag }}
+          path: randomx
 
-      # This repo's helper scripts, kept out of the RandomX tree.
+      # This repo, for the wrapper CMake project and helper scripts.
       - name: Checkout CryptoCraft scripts
         uses: actions/checkout@v4
         with:
           path: .cryptocraft
-          sparse-checkout: .github/scripts
+          sparse-checkout: |
+            .github/scripts
+            .github/randomx-shared
           sparse-checkout-cone-mode: false
 
-      # WINDOWS_EXPORT_ALL_SYMBOLS generates the export table MSVC otherwise omits:
-      # upstream's RANDOMX_EXPORT is empty, so a shared build exports nothing, producing
-      # no import library and a DLL with no symbols to look up. No-op off Windows.
+      # Built through a wrapper project that sets WINDOWS_EXPORT_ALL_SYMBOLS on the target.
+      # Upstream's RANDOMX_EXPORT is empty and its cmake_minimum_required(3.10) stops the
+      # CMAKE_-prefixed variable from initialising the property, so MSVC otherwise exports
+      # nothing: no import library, and a DLL the binding cannot resolve symbols in.
       - name: Configure
         run: >
-          cmake -S . -B build
+          cmake
+          -S .cryptocraft/.github/randomx-shared
+          -B build
           -DCMAKE_BUILD_TYPE=Release
-          -DBUILD_SHARED_LIBS=ON
-          -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
+          -DRANDOMX_SOURCE_DIR=${{ github.workspace }}/randomx
 
       - name: Build
         run: cmake --build build --config Release
@@ -99,12 +105,78 @@ jobs:
           if [ -z "$tests" ]; then
             echo "::error::randomx-tests not found under build/"; find build -maxdepth 2; exit 1
           fi
+          # Windows resolves the DLL from the executable's own directory.
+          cp "out/${{ matrix.name }}" "$(dirname "$tests")/" 2>/dev/null || true
           echo "Running $tests"
           "$tests"
+
+      # Shipped next to the binary so its origin is recoverable from the repo alone.
+      - name: Record provenance
+        shell: bash
+        run: |
+          cd randomx
+          cat > ../out/PROVENANCE.txt <<EOF
+          source:    https://github.com/tevador/RandomX
+          tag:       ${{ inputs.tag }}
+          commit:    $(git rev-parse HEAD)
+          platform:  ${{ matrix.artifact }}
+          runner:    ${{ matrix.os }}
+          built:     $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          run:       ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          checks:    all 11 required symbols exported; upstream randomx-tests passed
+          sha256:    $(cd .. && sha256sum "out/${{ matrix.name }}" | cut -d' ' -f1)
+          EOF
+          cat ../out/PROVENANCE.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: librandomx-${{ matrix.artifact }}
-          path: out/${{ matrix.name }}
+          path: out/
           if-no-files-found: error
+
+  # Collects every platform's binary and opens a PR. Only runs when all four succeeded,
+  # so the repo never holds a partial set.
+  pull-request:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: librandomx-*
+          path: artifacts
+
+      - name: Place binaries
+        run: |
+          for dir in artifacts/librandomx-*; do
+            platform="${dir#artifacts/librandomx-}"
+            target="miner/src/main/resources/native/$platform"
+            mkdir -p "$target"
+            cp "$dir"/* "$target/"
+          done
+          find miner/src/main/resources/native -type f | sort
+
+      # Pinned to a commit, not a tag: this action can write to the repo, and a mutable
+      # tag could be repointed at any commit by its owner.
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: randomx/${{ inputs.tag }}
+          title: 'feat: randomx ${{ inputs.tag }} binaries'
+          commit-message: 'feat: randomx ${{ inputs.tag }} binaries'
+          body: |
+            Built from [tevador/RandomX ${{ inputs.tag }}](https://github.com/tevador/RandomX/releases/tag/${{ inputs.tag }})
+            by [this run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+            Each platform passed the same checks before upload:
+            - all 11 symbols the binding resolves are exported
+            - upstream's `randomx-tests` passed against the official vectors
+
+            Per-binary provenance, including commit and SHA-256, is in each
+            `PROVENANCE.txt`. Run `./gradlew :miner:test` to confirm the vectors
+            reproduce through the binding.
+          delete-branch: true

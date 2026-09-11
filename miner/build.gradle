@@ -26,6 +26,13 @@ tasks.named('test', Test) {
     useJUnitPlatform()
     // The FFM API is still preview-adjacent in 21: downgrade the native-access warning.
     jvmArgs '--enable-native-access=ALL-UNNAMED'
+
+    // Point the tests at a library built outside the repo:
+    //   ./gradlew :miner:test -Pcryptocraft.randomx.path=/path/to/randomx.dll
+    // Without it, the vector tests skip unless a binary is vendored for this platform.
+    if (project.hasProperty('cryptocraft.randomx.path')) {
+        systemProperty 'cryptocraft.randomx.path', project.property('cryptocraft.randomx.path')
+    }
     testLogging {
         events 'passed', 'skipped', 'failed'
         showStandardStreams = true

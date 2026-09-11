@@ -118,10 +118,20 @@ pure-Java implementation would be 5–20× slower — RandomX is deliberately bu
 only on real CPUs, using runtime-compiled code, hardware AES and huge pages — and that
 would push payouts from days to months.
 
-**The binaries are built by CI and vendored.** Upstream ships source only, so a GitHub
-Actions workflow builds all three platforms from the pinned tag and the results are
-committed. Contributors need no C++ toolchain, and the provenance is ours rather than a
-third party's — which matters for a library antivirus flags.
+**The binaries are built by CI and vendored.** Upstream ships source only, so the *Build
+RandomX* workflow builds every platform from the pinned tag, checks each one exports the
+symbols the binding resolves and passes upstream's own test vectors, then opens a pull
+request adding them under `miner/src/main/resources/native/<platform>/` with a
+`PROVENANCE.txt` recording tag, commit, runner and SHA-256. Binaries enter the repo only
+that way — never from a local build, so every shipped library is reproducible and the
+provenance is ours rather than a third party's, which matters for a library antivirus
+flags. Contributors need no C++ toolchain; to test against a library built outside the
+repo, pass `-Pcryptocraft.randomx.path=<file>`.
+
+Upstream builds RandomX statically, so `RANDOMX_EXPORT` is empty and a shared build under
+MSVC exports nothing. `.github/randomx-shared/` wraps the upstream project and sets
+`WINDOWS_EXPORT_ALL_SYMBOLS` on the target; setting it as a `CMAKE_`-prefixed variable does
+not work, because upstream declares `cmake_minimum_required(VERSION 3.10)`.
 
 **FFM is reached reflectively.** 1.21.1 runs on Java 21, where FFM is a preview API:
 `--enable-preview` would version-lock the class files so Minecraft's launcher could not

@@ -27,6 +27,16 @@ public final class NativeLibrary {
         return Ffm.libraryLookup(locate(), arena);
     }
 
+    /** Whether a library is vendored for this platform, or pointed at by the override. */
+    public static boolean isAvailable() {
+        String override = System.getProperty(PATH_PROPERTY);
+        if (override != null && !override.isBlank()) {
+            return Files.isRegularFile(Path.of(override));
+        }
+        String resource = RESOURCE_ROOT + "/" + platformDirectory() + "/" + libraryFileName();
+        return NativeLibrary.class.getResource(resource) != null;
+    }
+
     static Path locate() {
         String override = System.getProperty(PATH_PROPERTY);
         if (override != null && !override.isBlank()) {

@@ -1,6 +1,8 @@
 package net.ultimateseesharp.cryptocraft.miner.randomx;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -16,9 +18,19 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 /**
  * The official vectors from upstream {@code src/tests/tests.cpp} (v1.2.3), tests 1a–1f.
  * Light and fast mode must produce identical hashes.
+ *
+ * <p>Skipped when no native library is vendored for this platform — run the
+ * <em>Build RandomX</em> workflow, which opens a PR adding them.
  */
 class RandomXVectorsTest {
     private static final HexFormat HEX = HexFormat.of();
+
+    @BeforeAll
+    static void requireNativeLibrary() {
+        Assumptions.assumeTrue(NativeLibrary.isAvailable(),
+                () -> "No RandomX library for " + NativeLibrary.platformDirectory()
+                        + "; run the Build RandomX workflow");
+    }
 
     static Stream<Arguments> vectors() {
         return Stream.of(
