@@ -1,0 +1,9 @@
+source:    https://github.com/tevador/RandomX
+tag:       v1.2.3
+commit:    12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
+platform:  windows-x86_64
+runner:    windows-latest
+built:     2026-09-11T19:47:23Z
+run:       https://github.com/UltimateSeeSharp/cryptocraft/actions/runs/34640613305
+checks:    all 11 required symbols exported; upstream randomx-tests passed
+sha256:    6a1e0da9ad6fb1a8481c8b9f1effa4abf8c68672ccf9c415e7df6bbe33945bee

@@ -1,0 +1,9 @@
+source:    https://github.com/tevador/RandomX
+tag:       v1.2.3
+commit:    12f2c2ffe2108d6cf54c391fee33c8bc3646cdab
+platform:  macos-aarch64
+runner:    macos-15
+built:     2026-09-11T19:46:51Z
+run:       https://github.com/UltimateSeeSharp/cryptocraft/actions/runs/34640613305
+checks:    all 11 required symbols exported; upstream randomx-tests passed
+sha256:    0791b5f29dae86783ca2d561fe85ee917a701db3b586f17f53214a332a27b3cf
