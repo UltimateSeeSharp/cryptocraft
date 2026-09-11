@@ -37,24 +37,26 @@ jobs:
           repository: tevador/RandomX
           ref: ${{ inputs.tag }}
 
+      # This repo's helper scripts, kept out of the RandomX tree.
+      - name: Checkout CryptoCraft scripts
+        uses: actions/checkout@v4
+        with:
+          path: .cryptocraft
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
+      # WINDOWS_EXPORT_ALL_SYMBOLS generates the export table MSVC otherwise omits:
+      # upstream's RANDOMX_EXPORT is empty, so a shared build exports nothing, producing
+      # no import library and a DLL with no symbols to look up. No-op off Windows.
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_SHARED_LIBS=ON
+          -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
 
       - name: Build
         run: cmake --build build --config Release
-
-      # The upstream test binary over the official vectors. If this fails the binary is
-      # not worth shipping. Located by search: multi-config generators (MSVC) emit into
-      # build/Release, single-config ones into build.
-      - name: Verify
-        shell: bash
-        run: |
-          tests=$(find build -name 'randomx-tests' -o -name 'randomx-tests.exe' | head -1)
-          if [ -z "$tests" ]; then
-            echo "::error::randomx-tests not found under build/"; find build -maxdepth 2; exit 1
-          fi
-          echo "Running $tests"
-          "$tests"
 
       - name: Stage
         shell: bash
@@ -67,7 +69,41 @@ jobs:
           cp "$lib" "out/${{ matrix.name }}"
           ls -l out/
 
+      # The binding resolves these by name, so a library that builds but exports nothing
+      # would fail only at runtime. MSVC in particular emits no exports unless asked.
+      - name: Check exported symbols
+        shell: bash
+        run: |
+          lib="out/${{ matrix.name }}"
+          case "${{ runner.os }}" in
+            Windows) python .cryptocraft/.github/scripts/pe_exports.py "$lib" > symbols.txt ;;
+            macOS)   nm -gU "$lib" > symbols.txt ;;
+            *)       nm -D --defined-only "$lib" > symbols.txt ;;
+          esac
+          missing=0
+          for fn in randomx_get_flags randomx_alloc_cache randomx_init_cache \
+                    randomx_release_cache randomx_alloc_dataset randomx_dataset_item_count \
+                    randomx_init_dataset randomx_release_dataset randomx_create_vm \
+                    randomx_destroy_vm randomx_calculate_hash; do
+            grep -q "$fn" symbols.txt || { echo "::error::missing export $fn"; missing=1; }
+          done
+          if [ "$missing" -eq 0 ]; then echo "All 11 required symbols exported."; fi
+          exit $missing
+
+      # Upstream's own test binary over the official vectors. Runs after the artifact is
+      # staged, so a linking problem here still leaves a usable library to download.
+      - name: Verify against upstream vectors
+        shell: bash
+        run: |
+          tests=$(find build \( -name 'randomx-tests' -o -name 'randomx-tests.exe' \) | head -1)
+          if [ -z "$tests" ]; then
+            echo "::error::randomx-tests not found under build/"; find build -maxdepth 2; exit 1
+          fi
+          echo "Running $tests"
+          "$tests"
+
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: librandomx-${{ matrix.artifact }}
           path: out/${{ matrix.name }}
