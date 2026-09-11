@@ -1,0 +1,6 @@
+{
+  "cryptocraft.configuration.title": "CryptoCraft Config",
+  "cryptocraft.configuration.section.cryptocraft.common.toml": "Common",
+  "cryptocraft.configuration.section.cryptocraft.common.toml.title": "Common",
+  "cryptocraft.configuration.disableRealMining": "Disable Real Mining"
+}
